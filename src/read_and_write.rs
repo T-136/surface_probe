@@ -1,0 +1,233 @@
+use chemfiles::{Atom, Frame, Trajectory, UnitCell};
+use fnv::FnvBuildHasher;
+use fnv::FnvHashMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fs;
+use std::io::{self, BufRead};
+
+pub fn occ_onlyocc_from_xyz(
+    atom_pos: &mut Vec<super::AtomPosition>,
+    xyz: &Vec<(String, [f64; 3])>,
+    xsites_positions: &[[f64; 3]],
+    atom_names: &HashMap<String, u8>,
+    coating: Option<String>,
+    nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
+) -> HashSet<u32, FnvBuildHasher> {
+    let supp_metal: String = "Al".to_string();
+    // let mut occ: Vec<u8> = vec![0; nsites as usize];
+    let mut onlyocc: HashSet<u32, FnvBuildHasher> =
+        fnv::FnvHashSet::with_capacity_and_hasher(xyz.len(), Default::default());
+
+    println!("atom_names: {:?}", atom_names);
+    for x in xyz.iter() {
+        for site in 0..atom_pos.len() {
+            let dist = (x.1[0] - xsites_positions[site as usize][0]).powf(2.)
+                + (x.1[1] - xsites_positions[site as usize][1]).powf(2.)
+                + (x.1[2] - xsites_positions[site as usize][2]).powf(2.);
+            if dist < 2.15 {
+                if x.0 == supp_metal {
+                    atom_pos[site as usize].occ = 100;
+                    continue;
+                }
+                atom_pos[site as usize].occ = atom_names[&x.0];
+                onlyocc.insert(site as u32);
+            }
+        }
+    }
+    println!("onlyocc len: {}", onlyocc.len());
+    if let Some(coat_atom) = coating {
+        let mut all_neigbors = Vec::new();
+        for atom in onlyocc.iter() {
+            all_neigbors.extend_from_slice(&nn[atom]);
+        }
+        for neighbor in all_neigbors {
+            if atom_pos[neighbor as usize].occ == 255 {
+                atom_pos[neighbor as usize].occ = atom_names[&coat_atom];
+                onlyocc.insert(neighbor);
+            }
+        }
+    }
+    println!("onlyocc len: {}", onlyocc.len());
+    onlyocc
+}
+
+// pub fn write_occ_as_xyz(
+//     atom_names: &super::AtomNames,
+//     save_folder: String,
+//     onlyocc: &HashSet<u32, fnv::FnvBuildHasher>,
+//     xsites_positions: &[[f64; 3]],
+//     unit_cell: &[f64; 3],
+//     atom_pos: &[super::AtomPosition],
+// ) {
+//     let mut trajectory = Trajectory::open(save_folder.clone() + "/lowest_energy.xyz", 'w').unwrap();
+//     let mut xyz: Vec<[f64; 3]> = Vec::new();
+//     for (j, ii) in onlyocc.iter().enumerate() {
+//         xyz.insert(j, xsites_positions[*ii as usize]);
+//     }
+//     let mut frame = Frame::new();
+//     frame.set_cell(&UnitCell::new(*unit_cell));
+//
+//     for atom in xyz.into_iter() {
+//         frame.add_atom(
+//             &Atom::new(atom_names.atom.as_ref().unwrap().as_str()),
+//             [atom[0], atom[1], atom[2]],
+//             None,
+//         );
+//     }
+//     for (i, atom) in atom_pos.iter().enumerate() {
+//         if atom.occ == 2 {
+//             frame.add_atom(
+//                 &Atom::new(atom_names.support.as_ref().unwrap().as_str()),
+//                 xsites_positions[i],
+//                 None,
+//             );
+//         }
+//     }
+//
+//     trajectory
+//         .write(&frame)
+//         .unwrap_or_else(|x| eprintln!("{}", x));
+// }
+
+fn fmt_scient(num: &str) -> f64 {
+    let mut parts = num.split('e');
+
+    let pre_num = parts.next().unwrap();
+    let exp = parts.next().unwrap();
+
+    let base: f64 = 10.;
+    pre_num.parse::<f64>().unwrap() * base.powi(exp.parse::<i32>().unwrap())
+}
+
+pub fn read_atom_sites(input_file: &str, nsites: u32) -> Vec<[f64; 3]> {
+    println!("reading atom_sites from: {}", input_file);
+    let mut xsites_positions: Vec<[f64; 3]> = Vec::with_capacity(nsites as usize);
+    let pairlist = fs::File::open(input_file).expect("Should have been able to read the file");
+    let lines = io::BufReader::new(pairlist);
+
+    for line in lines.lines() {
+        let r = line.unwrap();
+        let list: Vec<&str> = r.split_whitespace().clone().collect();
+        let temp_str_vec: [&str; 3] = [list[0], list[1], list[2]];
+        // let temp_vec: [f64; 3] = temp_str_vec.map(|i| fmt_scient(i));
+        let temp_vec: [f64; 3] = temp_str_vec.map(fmt_scient);
+        xsites_positions.push(temp_vec);
+    }
+    xsites_positions
+}
+
+pub fn read_nn(pairlist_file: &str) -> HashMap<u32, [u32; 12], FnvBuildHasher> {
+    println!("reading pairlists from: {}", pairlist_file);
+
+    let pairlist = fs::File::open(pairlist_file).expect("Should have been able to read the file");
+
+    let lines = io::BufReader::new(pairlist);
+    let mut nn: HashMap<u32, [u32; 12], FnvBuildHasher> =
+        FnvHashMap::with_capacity_and_hasher(5400, Default::default());
+
+    for line in lines.lines() {
+        let r = line.unwrap();
+        let list: Vec<&str> = r.split_whitespace().clone().collect();
+        let mut neighbors: [u32; 12] = [0; 12];
+        let prime = list.first();
+        for (i, l) in list.iter().skip(1).enumerate() {
+            neighbors[i] = l.parse::<u32>().unwrap()
+        }
+        nn.insert(prime.unwrap().parse::<u32>().unwrap(), neighbors);
+    }
+    nn
+}
+
+// pub fn read_nn_pair_no_intersec(
+//     nn_pairlist_file: &str,
+// ) -> HashMap<u64, [[u32; super::NN_PAIR_NO_INTERSEC_NUMBER]; 2], FnvBuildHasher> {
+//     let nn_pairlist =
+//         fs::File::open(nn_pairlist_file).expect("Should have been able to read the file");
+//
+//     let lines = io::BufReader::new(nn_pairlist);
+//
+//     let mut nn_pair: HashMap<u64, [[u32; super::NN_PAIR_NO_INTERSEC_NUMBER]; 2], FnvBuildHasher> =
+//         FnvHashMap::with_capacity_and_hasher(32000, Default::default());
+//
+//     for line in lines.lines() {
+//         let r = line.unwrap();
+//         let test: Vec<&str> = r.split_whitespace().clone().collect();
+//         let site: u32 = std::cmp::min(
+//             test[0].parse::<u32>().unwrap(),
+//             test[1].parse::<u32>().unwrap(),
+//         );
+//         let j: u32 = std::cmp::max(
+//             test[0].parse::<u32>().unwrap(),
+//             test[1].parse::<u32>().unwrap(),
+//         );
+//         let mut neighbors: [[u32; super::NN_PAIR_NO_INTERSEC_NUMBER]; 2] =
+//             [[0; super::NN_PAIR_NO_INTERSEC_NUMBER]; 2];
+//
+//         for (i, l) in test.iter().skip(2).enumerate() {
+//             if i < 7 {
+//                 neighbors[0][i] = l.parse::<u32>().unwrap()
+//             } else if i < 14 {
+//                 neighbors[1][i - 7] = l.parse::<u32>().unwrap()
+//             }
+//         }
+//         nn_pair.insert(site as u64 + ((j as u64) << 32), neighbors);
+//     }
+//
+//     nn_pair
+// }
+
+pub fn read_sample(input_file: &str) -> Vec<(String, [f64; 3])> {
+    let mut trajectory = Trajectory::open(input_file, 'r').unwrap();
+    let mut frame = Frame::new();
+    trajectory.read(&mut frame).unwrap();
+    let mut atom_vec: Vec<(String, [f64; 3])> = Vec::new();
+    for (i, atom) in frame.iter_atoms().enumerate() {
+        atom_vec.push((atom.name(), frame.positions()[i]));
+    }
+    atom_vec
+}
+
+fn find_key_for_value<'a>(map: &'a HashMap<String, u8>, value: u8) -> Option<&'a str> {
+    map.iter().find_map(|(key, val)| {
+        if val == &value {
+            Some(key.as_str())
+        } else {
+            None
+        }
+    })
+}
+
+pub fn write_occ_as_xyz(
+    save_file: &str,
+    save_folder: String,
+    snapshot_sections: &[Vec<u8>],
+    xsites_positions: &[[f64; 3]],
+    unit_cell: &[f64; 3],
+    atom_names: &HashMap<String, u8>,
+) {
+    let _ = Trajectory::open(save_folder.clone() + "/" + save_file, 'w').unwrap();
+    let mut trajectory = Trajectory::open(save_folder.clone() + "/" + save_file, 'a').unwrap();
+
+    for snapshot in snapshot_sections.iter() {
+        let mut frame = Frame::new();
+        frame.set_cell(&UnitCell::new(unit_cell.clone()));
+        for (i, atom) in snapshot.iter().enumerate() {
+            if *atom == 255 {
+                continue;
+            }
+            frame.add_atom(
+                &Atom::new(
+                    find_key_for_value(atom_names, *atom).expect(
+                        format!("unknown atom number {:?}, {:?}", atom_names, atom).as_str(),
+                    ),
+                ),
+                xsites_positions[i],
+                None,
+            );
+        }
+        trajectory
+            .write(&frame)
+            .unwrap_or_else(|x| eprintln!("{}", x));
+    }
+}

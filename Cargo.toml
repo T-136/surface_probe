@@ -1,0 +1,13 @@
+[package]
+name = "surface_probe"
+version = "0.1.0"
+edition = "2024"
+
+[patch.crates-io]
+chemfiles = { git = "https://github.com/T-136/chemfiles.rs.git" }
+
+
+[dependencies]
+anyhow = "1.0.70"
+chemfiles = "0.10.3"
+fnv = "1.0.7"
