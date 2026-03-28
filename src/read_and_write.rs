@@ -6,8 +6,16 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::{self, BufRead};
 
+#[derive(Clone, Default)]
+pub struct AtomPosition {
+    pub occ: u8,
+    pub cn_metal: usize,
+    pub nn_support: u8,
+    pub nn: [u32; 12],
+}
+
 pub fn occ_onlyocc_from_xyz(
-    atom_pos: &mut Vec<super::AtomPosition>,
+    atom_pos: &mut Vec<AtomPosition>,
     xyz: &Vec<(String, [f64; 3])>,
     xsites_positions: &[[f64; 3]],
     atom_names: &HashMap<String, u8>,

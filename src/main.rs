@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use surface_probe::{
-    occ_onlyocc_from_xyz, read_atom_sites, read_nn, read_sample, surface, write_occ_as_xyz,
+    occ_onlyocc_from_xyz, read_and_write::AtomPosition, read_atom_sites, read_nn, read_sample,
+    surface, write_occ_as_xyz,
 };
 
 fn main() {
@@ -11,8 +12,8 @@ fn main() {
     let input_cluster = read_sample(inp);
     let nn = read_nn(&format!("{}/nearest_neighbor", grid_folder));
     let xsites_positions = read_atom_sites(&format!("{}/atom_sites", grid_folder), 0);
-    let mut atom_pos: Vec<surface_probe::AtomPosition> = vec![
-        surface_probe::AtomPosition {
+    let mut atom_pos: Vec<AtomPosition> = vec![
+        AtomPosition {
             occ: 255,
             ..Default::default()
         };

@@ -1,17 +1,9 @@
 use std::collections::{HashMap, HashSet};
-mod read_and_write;
+pub mod read_and_write;
 use fnv::{FnvBuildHasher, FnvHashMap, FnvHashSet};
 pub use read_and_write::{
     occ_onlyocc_from_xyz, read_atom_sites, read_nn, read_sample, write_occ_as_xyz,
 };
-
-#[derive(Clone, Default)]
-pub struct AtomPosition {
-    pub occ: u8,
-    pub cn_metal: usize,
-    pub nn_support: u8,
-    pub nn: [u32; 12],
-}
 
 pub fn surface(
     onlyocc: &HashSet<u32, FnvBuildHasher>,
