@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    mem,
+};
 pub mod read_and_write;
 use fnv::{FnvBuildHasher, FnvHashMap, FnvHashSet};
 pub use read_and_write::{
@@ -21,54 +24,30 @@ pub fn surface(
     get_start_positions(sites, &mut current_positions);
     println!("onlyocc: {:?}", onlyocc);
 
-    atom_layering(
-        current_positions,
-        &mut visited,
-        nn,
-        onlyocc,
-        &mut surface,
-        &mut near_surface,
-    );
-    (surface, near_surface)
-}
-
-fn atom_layering(
-    current_positions: HashSet<u32, FnvBuildHasher>,
-    visited: &mut HashSet<u32, FnvBuildHasher>,
-    nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
-    onlyocc: &HashSet<u32, FnvBuildHasher>,
-    surface: &mut HashSet<u32, FnvBuildHasher>,
-    near_surface: &mut HashSet<u32, FnvBuildHasher>,
-) {
     let mut future_positions: HashSet<u32, FnvBuildHasher> =
         FnvHashSet::with_hasher(Default::default());
-    println!("len visited: {}", visited.len());
-    for site in current_positions.iter() {
-        let neighbors = nn.get(&site).unwrap();
-        for neighbor in neighbors {
-            if visited.contains(neighbor) || current_positions.contains(neighbor) {
-                continue;
-            } else if onlyocc.contains(neighbor) {
-                surface.insert(*neighbor);
-                near_surface.insert(*site);
-            } else {
-                future_positions.insert(*neighbor);
+
+    while !current_positions.is_empty() {
+        println!("len visited: {}", visited.len());
+        for site in current_positions.iter() {
+            let neighbors = nn.get(&site).unwrap();
+            for neighbor in neighbors {
+                if visited.contains(neighbor) || current_positions.contains(neighbor) {
+                    continue;
+                } else if onlyocc.contains(neighbor) {
+                    surface.insert(*neighbor);
+                    near_surface.insert(*site);
+                } else {
+                    future_positions.insert(*neighbor);
+                }
             }
         }
-    }
-
-    if !future_positions.is_empty() {
         visited.extend(current_positions.iter());
+        mem::swap(&mut future_positions, &mut current_positions);
 
-        atom_layering(
-            future_positions,
-            visited,
-            nn,
-            onlyocc,
-            surface,
-            near_surface,
-        );
+        future_positions.clear();
     }
+    (surface, near_surface)
 }
 
 pub fn get_start_positions(xyz: &[[f64; 3]], start_sites: &mut HashSet<u32, FnvBuildHasher>) {
