@@ -30,7 +30,7 @@ fn main() {
         None,
         &nn,
     );
-    let (surface, empty) = surface(&onlyocc, &nn, &xsites_positions);
+    let (surface, empty, vacancies) = surface(&onlyocc, &nn, &xsites_positions);
     let mut occ_surface = vec![255; atom_pos.len()];
     occ_surface
         .iter_mut()

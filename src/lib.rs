@@ -12,7 +12,11 @@ pub fn surface(
     onlyocc: &HashSet<u32, FnvBuildHasher>,
     nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
     sites: &[[f64; 3]],
-) -> (HashSet<u32, FnvBuildHasher>, HashSet<u32, FnvBuildHasher>) {
+) -> (
+    HashSet<u32, FnvBuildHasher>,
+    HashSet<u32, FnvBuildHasher>,
+    HashSet<u32, FnvBuildHasher>,
+) {
     // let mut visi: HashMap<u32, [u32; super::CN], FnvBuildHasher> =
     //     FnvHashMap::with_capacity_and_hasher(5400, Default::default());
     let mut visited: HashSet<u32, FnvBuildHasher> = FnvHashSet::with_hasher(Default::default());
@@ -23,6 +27,7 @@ pub fn surface(
         FnvHashSet::with_hasher(Default::default());
     get_start_positions(sites, &mut current_positions);
     println!("onlyocc: {:?}", onlyocc);
+    let mut vacacies: HashSet<u32, FnvBuildHasher> = FnvHashSet::with_hasher(Default::default());
 
     let mut future_positions: HashSet<u32, FnvBuildHasher> =
         FnvHashSet::with_hasher(Default::default());
@@ -47,10 +52,34 @@ pub fn surface(
 
         future_positions.clear();
     }
-    (surface, near_surface)
+
+    visited.clear();
+
+    current_positions = surface.clone();
+    while !current_positions.is_empty() {
+        println!("len visited: {}", visited.len());
+        for site in current_positions.iter() {
+            let neighbors = nn.get(&site).unwrap();
+            for neighbor in neighbors {
+                if visited.contains(neighbor) || current_positions.contains(neighbor) {
+                    continue;
+                } else if onlyocc.contains(neighbor) {
+                    future_positions.insert(*neighbor);
+                } else {
+                    vacacies.insert(*neighbor);
+                }
+            }
+        }
+        visited.extend(current_positions.iter());
+        mem::swap(&mut future_positions, &mut current_positions);
+
+        future_positions.clear();
+    }
+
+    (surface, near_surface, vacacies)
 }
 
-pub fn get_start_positions(xyz: &[[f64; 3]], start_sites: &mut HashSet<u32, FnvBuildHasher>) {
+fn get_start_positions(xyz: &[[f64; 3]], start_sites: &mut HashSet<u32, FnvBuildHasher>) {
     let min_max: [(f64, f64); 3] = [
         min_max_xyz(xyz, 0),
         min_max_xyz(xyz, 1),
